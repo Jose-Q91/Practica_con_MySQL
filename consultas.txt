@@ -1,0 +1,241 @@
+#Realizar al menos 3 procedimientos o funciones de ABM de datos.
+
+
+CREATE DEFINER=`root`@`localhost` FUNCTION `fs_alta_dato`(p_username varchar(40), p_email varchar(40), p_pass varchar(40), 
+p_adress varchar(40), p_phone varchar(40), p_deparment varchar(40)) RETURNS varchar(60) CHARSET utf8 COLLATE utf8_general_ci
+BEGIN
+declare v_username varchar(40);
+declare v_result varchar(60);
+select username INTO v_username from user where username = p_username limit 1;
+if v_username is null then
+INSERT INTO user (username, email, password, date, role, adress, phone, deparment)
+VALUES (p_username, p_email, p_pass, CURRENT_DATE(), 'user', p_adress, p_phone, p_deparment);
+SET v_result = 'Se inserto con exito';
+else 
+SET v_result = 'Error al insertar usuario, ya existe usuario';
+end if;
+RETURN v_result;
+END
+
+SELECT `fs_alta_dato`('lautaro', 'lautaro@gmail.com', '123', 'Av viamonte 123', '1534433333', "3");
+
+CREATE DEFINER=`root`@`localhost` FUNCTION `fs_baja_dato`(p_id_user INTEGER) RETURNS varchar(40) CHARSET utf8 COLLATE utf8_general_ci
+BEGIN
+declare v_id_user INTEGER;
+declare v_result varchar(40);
+SELECT id_user INTO v_id_user FROM useR WHERE id_user = p_id_user;
+IF(v_id_user) THEN
+DELETE FROM user WHERE id_user = p_id_user;
+SET v_result = 'Eliminado';
+ELSE
+SET v_result = 'Error al eliminar';
+END IF;
+RETURN v_result;
+END
+
+SELECT `fs_baja_dato`(21);
+
+CREATE DEFINER=`root`@`localhost` FUNCTION `fs_modificar_dato`(p_id_user INTEGER, p_username varchar(40), p_email varchar(40), p_pass varchar(40), 
+p_role varchar(40), p_adress varchar(40), p_phone varchar(40), p_deparment varchar(40)) RETURNS varchar(40) CHARSET utf8 COLLATE utf8_general_ci
+BEGIN
+declare v_id_user INTEGER;
+declare v_result varchar(40);
+SELECT id_user INTO v_id_user FROM useR WHERE id_user = p_id_user;
+IF(v_id_user) THEN
+UPDATE user SET username=p_username, email=p_email, password=p_pass, role=p_role, adress=p_adress,
+phone = p_phone, deparment=p_deparment WHERE id_user = p_id_user;
+SET v_result = 'Editado con exito';
+ELSE
+SET v_result = 'ERROR AL EDITAR';
+END IF;
+RETURN v_result;
+END
+
+SELECT `fs_modificar_dato`(1, 'walter', 'walter@gmail.com', '123', 'admin', 'Av medrano 123', '1534833333', "3");
+
+
+#<------------------------------------------------------------------------------------------------------------------>
+
+
+#Realizar al menos 3 procedimientos o funciones para la obtención de reportes de control o de auditoría.
+
+
+#a)reporte de precio total de ventas confirmadas
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_total_ventas`(in p_estado_de_venta INTEGER)
+BEGIN
+select sum(p.price * d.quantity)
+from detail d
+inner join sale s
+on s.id_sale = d.sale_id_sale
+inner join product p
+on d.product_id_product = p.id_product
+where s.status_sale = p_estado_de_venta;
+END
+
+call `sp_total_ventas`(1);
+
+#b)usuarios registrados entre dos fechas
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_cant_usuarios_fecha`(in p_fecha_uno date, in p_fecha_dos date)
+BEGIN
+select *
+from user
+where date between p_fecha_uno and p_fecha_dos;
+END
+
+call `sp_cant_usuarios_fecha`('2023-11-16', '2023-11-21');
+
+#c)cantidad de ventas entregadas
+CREATE DEFINER=`root`@`localhost` PROCEDURE `cant_ventas_entregadas`(out result varchar(40))
+BEGIN
+DECLARE v_id_shipment INT;
+SET v_id_shipment = 0;
+select id_shipment into v_id_shipment
+from shipment
+where status = 1
+limit 1;
+IF (v_id_shipment > 1) THEN
+SELECT count(*) from shipment
+where status = 1;
+else
+SET result = "ERROR";
+END IF;
+END
+
+CALL cant_ventas_entregadas(@result)
+
+#<------------------------------------------------------------------------------------------------------------------>
+#Utilizar un cursor para el recorrido de datos en al menos una función o procedimiento almacenado.
+
+#cursor para cambiar los precios totales en la tabla ventas (sale)
+CREATE DEFINER=`root`@`localhost` PROCEDURE `ps_cursor`()
+BEGIN
+DECLARE v_final BOOL default false;
+DECLARE v_tot_price DOUBLE;
+DECLARE v_id_sale INTEGER;
+
+DECLARE cursor_productos CURSOR FOR select (p.price * d.quantity) as tot_price, s.id_sale as id
+from detail d
+inner join sale s
+on s.id_sale = d.sale_id_sale
+inner join product p
+on d.product_id_product = p.id_product;
+DECLARE CONTINUE HANDLER FOR NOT FOUND SET v_final = TRUE;
+open cursor_productos;
+bucle:LOOP
+fetch cursor_productos into v_tot_price, v_id_sale;
+IF v_final then
+leave bucle;
+end if;
+update sale set total_price = v_tot_price where id_sale = v_id_sale;
+END LOOP bucle;
+
+CLOSE cursor_productos;
+END
+call `ps_cursor`();
+
+
+#<------------------------------------------------------------------------------------------------------------------>
+#Realizar al menos 3 vistas que sirvan como reportes útiles (no select *)
+
+
+#VISTA PARA CALCULAR EL TOTAL VENTAS CONFIRMADOS
+CREATE 
+    ALGORITHM = UNDEFINED 
+    DEFINER = `root`@`localhost` 
+    SQL SECURITY DEFINER
+VIEW `healthybite`.`view_tot_ventas` AS
+    SELECT 
+        SUM(`healthybite`.`sale`.`total_price`) AS `total`
+    FROM
+        `healthybite`.`sale`
+    WHERE
+        `healthybite`.`sale`.`status_sale` = 1
+
+
+#VISTA PARA CALCULAR EL TOTAL DE EMPELADOS
+CREATE 
+    ALGORITHM = UNDEFINED 
+    DEFINER = `root`@`localhost` 
+    SQL SECURITY DEFINER
+VIEW `view_cant_empleados` AS
+    SELECT 
+        COUNT(0) AS `count(*)`
+    FROM
+        `employee`
+
+#VISTA PARA ALERTAR SI LA CANTIDAD DE STOCK DISPONIBLE ES MENOR QUE 2 UNIDADES
+CREATE 
+    ALGORITHM = UNDEFINED 
+    DEFINER = `root`@`localhost` 
+    SQL SECURITY DEFINER
+VIEW `view_alerta_stock_productos` AS
+    SELECT 
+        `product`.`id_product` AS `id`,
+        `product`.`name` AS `name`,
+        `product`.`stock` AS `stock`
+    FROM
+        `product`
+    WHERE
+        `product`.`stock` < 2
+
+#FORMA SIN USAR SELECT
+
+CREATE DEFINER=`root`@`localhost` PROCEDURE `sp_reportes_generales`()
+BEGIN
+ select * from `view_tot_ventas`;
+ select * from `view_cant_empleados`;
+ select * from  `view_alerta_stock_productos`;
+END
+
+
+call `sp_reportes_generales`();
+
+
+#<------------------------------------------------------------------------------------------------------------------>
+#Crear al menos 1 trigger.
+
+
+#cambio de precio del producto
+DELIMITER //
+CREATE TRIGGER `triger_update_precio_producto`
+BEFORE UPDATE ON product
+for each row
+BEGIN
+IF NEW.price <> OLD.price then
+set NEW.price = New.price * 2;
+END IF;
+END//
+DELIMITER ;
+
+update product set price = 900 where id_product = 2;
+
+
+#Utilizar al menos 1 tabla temporal.
+
+#CREO TABLA TEMPORAL DE LOG
+  CREATE TEMPORARY TABLE temp_table_log (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        description  VARCHAR(50),
+        date datetime
+    );
+
+#CREO UN TRIGGER PARA GUARDAR LOS LOG ANTES DE INSERTAR UN NUEVO USUARIO  
+DELIMITER //
+CREATE TRIGGER log_tabla_usuario 
+AFTER INSERT ON user
+FOR EACH ROW 
+BEGIN
+    INSERT INTO temp_table_log (description, date) VALUES (CONCAT("Se creó correctamente el registro: ", NEW.username), current_date());
+END;
+//
+DELIMITER ;
+
+#INSERTO UN NUEVO USUARIO
+SELECT `fs_alta_dato`('maximo', 'maximo@gmail.com', '123', 'Av viamonte 456', '153487333', "2");
+
+#SELECCIONO TODOS LOS LOG REGISTRADOS
+select * from temp_table_log;
+
+#<------------------------------------------------------------------------------------------------------------------>
+#Las transacciones deben estar protegidas con “commit”.--> estan protegidas de forma implicita.
